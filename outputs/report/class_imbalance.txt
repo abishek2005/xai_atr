@@ -1,0 +1,9 @@
+CLASS DISTRIBUTION - LOW-SUPPORT CLASSES (<=15 total annotations)
+
+Class                  Total annotations
+WZ9                                   15
+
+Total classes: 114
+Classes with <=15 annotations: 1
+Median annotations per class: 298
+Max annotations (single class): 2104

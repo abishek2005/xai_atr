@@ -1,0 +1,7 @@
+class,precision,recall,f1,support
+AirbusA380,0.0,0.0,0.0,6
+AirbusA350,1.0,0.0,0.0,6
+Boeing787,0.0,0.0,0.0,6
+Boeing757,0.0,0.0,0.0,6
+WZ9,1.0,0.0,0.0,6
+MQ20,1.0,0.0,0.0,6
