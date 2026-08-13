@@ -1,0 +1,13 @@
+﻿venv/
+data/raw/
+data/yolo/
+runs/
+outputs/models/
+outputs/cam/
+outputs/report/
+static/uploads/
+static/results/
+__pycache__/
+*.pyc
+*.pt
+yolov8n.pt

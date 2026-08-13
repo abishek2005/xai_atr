@@ -1,0 +1,235 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATR XAI | Grad-CAM</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0a0a0f;
+           color: #e0e0e0; min-height: 100vh; }
+
+    .header { background: #111118; border-bottom: 1px solid #222;
+              padding: 1.2rem 2rem; display: flex; align-items: center; gap: 12px; }
+    .header h1 { font-size: 1.3rem; font-weight: 600; color: #fff; }
+    .badge { background: #1a3a5c; color: #4da6ff; font-size: 11px;
+             padding: 3px 10px; border-radius: 20px; border: 1px solid #2a5a8c; }
+
+    .main { max-width: 1100px; margin: 2rem auto; padding: 0 1.5rem;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+    .card { background: #111118; border: 1px solid #1e1e2e;
+            border-radius: 12px; padding: 1.5rem; }
+    .card h2 { font-size: 1rem; color: #aaa; margin-bottom: 1rem;
+               font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .upload-zone { border: 2px dashed #2a2a3e; border-radius: 10px;
+                   padding: 2.5rem; text-align: center; cursor: pointer;
+                   transition: all 0.2s; }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #4da6ff; background: #0d1929; }
+    .upload-zone p { color: #666; font-size: 14px; margin-top: 0.5rem; }
+    .upload-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    #file-input { display: none; }
+
+    .preview-img { width: 100%; border-radius: 8px; margin-top: 1rem;
+                   display: none; border: 1px solid #222; }
+
+    .class-select { width: 100%; margin-top: 1rem; padding: 0.6rem;
+                    background: #0d0d14; color: #ccc; border: 1px solid #2a2a3e;
+                    border-radius: 8px; font-size: 13px; }
+
+    .btn-predict { width: 100%; margin-top: 1rem; padding: 0.8rem;
+                   background: #1a3a5c; color: #4da6ff; border: 1px solid #2a5a8c;
+                   border-radius: 8px; font-size: 15px; cursor: pointer;
+                   transition: all 0.2s; display: none; }
+    .btn-predict:hover { background: #1e4570; }
+    .btn-predict:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .result-section { display: none; }
+    .pred-label { font-size: 1.6rem; font-weight: 700; color: #4da6ff; }
+    .confidence { font-size: 1rem; color: #888; margin-top: 0.3rem; }
+
+    .prob-bar { margin: 0.5rem 0; }
+    .prob-bar label { font-size: 12px; color: #888; display: flex;
+                      justify-content: space-between; margin-bottom: 3px; }
+    .bar-track { background: #1e1e2e; border-radius: 4px; height: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg, #1a3a5c, #4da6ff);
+                border-radius: 4px; transition: width 0.8s ease; }
+    .bar-fill.top { background: linear-gradient(90deg, #1a5c3a, #4dff9a); }
+
+    .gradcam-img { width: 100%; border-radius: 8px; margin-top: 1rem; border: 1px solid #222; }
+    .explanation { background: #0d1929; border: 1px solid #1e3a5c; border-radius: 8px;
+                   padding: 1rem; margin-top: 1rem; font-size: 13px;
+                   color: #aac4e0; line-height: 1.6; }
+
+    .loading { text-align: center; padding: 2rem; display: none; }
+    .spinner { width: 36px; height: 36px; border: 3px solid #1e1e2e;
+               border-top-color: #4da6ff; border-radius: 50%;
+               animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .full-width { grid-column: 1 / -1; }
+    .no-det { color: #666; font-size: 14px; padding: 1rem 0; }
+    @media (max-width: 700px) { .main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <span>&#9992;&#65039;</span>
+  <h1>Explainable ATR - Aircraft Detection</h1>
+  <span class="badge">XAI &middot; Grad-CAM</span>
+  <span class="badge" style="margin-left:auto; background:#1a2e1a; color:#4daa4d; border-color:#2a5a2a;">
+    YOLOv8 &middot; {{ class_names|length }} Classes
+  </span>
+</div>
+
+<div class="main">
+  <!-- Upload Card -->
+  <div class="card">
+    <h2>Upload Aircraft Image</h2>
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">&#9992;&#65039;</div>
+      <strong>Drop aircraft image here</strong>
+      <p>Supports JPG, PNG</p>
+    </div>
+    <input type="file" id="file-input" accept="image/*">
+    <img id="preview" class="preview-img" alt="Aircraft Preview">
+
+    <select class="class-select" id="class-select">
+      <option value="auto">Grad-CAM target: Auto (highest scoring)</option>
+      {% for cls in class_names %}
+      <option value="{{ cls }}">{{ cls }}</option>
+      {% endfor %}
+    </select>
+
+    <button class="btn-predict" id="btn-predict" onclick="predict()">
+      Detect & Generate Grad-CAM &rarr;
+    </button>
+  </div>
+
+  <!-- Result Card -->
+  <div class="card">
+    <h2>Detection Result</h2>
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p style="color:#666;font-size:14px">Running detection + Grad-CAM...</p>
+    </div>
+    <div class="result-section" id="result-section">
+      <div class="pred-label" id="pred-label">&mdash;</div>
+      <div class="confidence" id="confidence-text">&mdash;</div>
+      <div style="margin-top:1.2rem" id="prob-bars"></div>
+    </div>
+  </div>
+
+  <!-- Detection + Grad-CAM full width -->
+  <div class="card full-width" id="gradcam-card" style="display:none">
+    <h2>Detection & Grad-CAM Explainability</h2>
+    <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+      <div style="flex:1; min-width:280px;">
+        <p style="font-size:12px;color:#666;margin-bottom:0.4rem;">Detections</p>
+        <img id="det-img" class="gradcam-img" alt="Detections" style="margin-top:0;">
+      </div>
+      <div style="flex:1; min-width:280px;">
+        <p style="font-size:12px;color:#666;margin-bottom:0.4rem;">Grad-CAM Heatmap</p>
+        <img id="gradcam-img" class="gradcam-img" alt="Grad-CAM heatmap" style="margin-top:0;">
+      </div>
+    </div>
+    <p style="font-size:12px;color:#555;margin-top:0.9rem">
+      Left: Bounding boxes with class + confidence &middot; Right: Activation heatmap (red = high attention)
+    </p>
+  </div>
+</div>
+
+<script>
+  const uploadZone = document.getElementById('upload-zone');
+  const fileInput  = document.getElementById('file-input');
+  let selectedFile = null;
+
+  fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+  uploadZone.addEventListener('dragover', e => {
+    e.preventDefault(); uploadZone.classList.add('dragover');
+  });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault(); uploadZone.classList.remove('dragover');
+    handleFile(e.dataTransfer.files[0]);
+  });
+
+  function handleFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const prev = document.getElementById('preview');
+      prev.src = e.target.result;
+      prev.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+    document.getElementById('btn-predict').style.display = 'block';
+    document.getElementById('result-section').style.display = 'none';
+    document.getElementById('gradcam-card').style.display = 'none';
+  }
+
+  async function predict() {
+    if (!selectedFile) return;
+    const btn = document.getElementById('btn-predict');
+    btn.disabled = true;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('result-section').style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('class_filter', document.getElementById('class-select').value);
+
+    try {
+      const res = await fetch('/predict', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (data.error) { alert('Error: ' + data.error); btn.disabled = false;
+        document.getElementById('loading').style.display = 'none'; return; }
+
+      const barsDiv = document.getElementById('prob-bars');
+      barsDiv.innerHTML = '';
+
+      if (data.detections.length) {
+        const top = data.detections.reduce((a, b) => a.confidence > b.confidence ? a : b);
+        document.getElementById('pred-label').textContent = top.class.toUpperCase();
+        document.getElementById('confidence-text').textContent =
+          `${data.count} detection(s) found`;
+
+        data.detections
+          .sort((a, b) => b.confidence - a.confidence)
+          .forEach((d, i) => {
+            const isTop = i === 0;
+            barsDiv.innerHTML += `
+              <div class="prob-bar">
+                <label><span>${d.class}</span><span>${(d.confidence * 100).toFixed(1)}%</span></label>
+                <div class="bar-track">
+                  <div class="bar-fill ${isTop ? 'top' : ''}" style="width:${d.confidence * 100}%"></div>
+                </div>
+              </div>`;
+          });
+      } else {
+        document.getElementById('pred-label').textContent = 'NO DETECTIONS';
+        document.getElementById('confidence-text').textContent = 'No aircraft found above confidence threshold';
+        barsDiv.innerHTML = '<p class="no-det">Try a clearer or closer image of the aircraft.</p>';
+      }
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('result-section').style.display = 'block';
+
+      document.getElementById('det-img').src = data.detection_image + '?t=' + Date.now();
+      document.getElementById('gradcam-img').src = data.gradcam_image + '?t=' + Date.now();
+      document.getElementById('gradcam-card').style.display = 'block';
+
+    } catch (err) {
+      alert('Error: ' + err.message);
+      document.getElementById('loading').style.display = 'none';
+    }
+    btn.disabled = false;
+  }
+</script>
+</body>
+</html>
