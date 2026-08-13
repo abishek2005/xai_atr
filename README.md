@@ -23,7 +23,7 @@ Get-Content configs\data.yaml
 python src\train.py
 
 
-if crashes resume : 
+if crashes resume:
 Get-ChildItem runs\detect | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 python src\train.py --resume runs\detect\train-N\weights\last.pt
 
@@ -39,4 +39,3 @@ python src\failure_analysis.py --top-n 6 --min-support 5
 
 
 python app.py
-
